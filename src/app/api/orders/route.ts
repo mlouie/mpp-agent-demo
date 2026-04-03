@@ -1,35 +1,52 @@
 /**
  * MPP-Gated Order Placement API
  *
- * Places an order and charges the full order total via MPP.
- * Demonstrates DYNAMIC PRICING with MPP.
+ * Places an order and charges the full order total (including fees, tax, tip)
+ * via MPP. Demonstrates DYNAMIC PRICING with MPP.
+ *
+ * The response includes a full price breakdown matching DoorDash's real
+ * checkout experience: subtotal, service fee, delivery fee, tax, tip.
  *
  * Production note: For a real marketplace, you'd validate item
  * availability, apply taxes/fees, and store the order in a database.
  */
 import { NextRequest } from "next/server";
 import { mppServer } from "@/lib/mpp-server";
-import { getRestaurantById, computeOrderTotal } from "@/data/restaurants";
+import {
+  getRestaurantById,
+  computeOrderTotal,
+  computeOrderFees,
+} from "@/data/restaurants";
 import { sessionStore } from "@/lib/session-store";
 
 export async function POST(request: NextRequest) {
   const body = await request.clone().json();
-  const { restaurantId, itemIds } = body as { restaurantId: string; itemIds: string[] };
+  const { restaurantId, itemIds } = body as {
+    restaurantId: string;
+    itemIds: string[];
+  };
 
   const restaurant = getRestaurantById(restaurantId);
   if (!restaurant) {
-    return Response.json({ error: `Restaurant not found: ${restaurantId}` }, { status: 400 });
+    return Response.json(
+      { error: `Restaurant not found: ${restaurantId}` },
+      { status: 400 }
+    );
   }
 
-  let total: number;
+  let subtotal: number;
   try {
-    total = computeOrderTotal(restaurantId, itemIds);
+    subtotal = computeOrderTotal(restaurantId, itemIds);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
 
-  // --- MPP payment gate with dynamic amount ---
-  const result = await mppServer.charge({ amount: String(total) })(request);
+  const fees = computeOrderFees(restaurantId, subtotal);
+
+  // --- MPP payment gate with dynamic amount (full customer total) ---
+  const result = await mppServer.charge({ amount: String(fees.total) })(
+    request
+  );
   if (result.status === 402) return result.challenge;
   // --- End MPP gate ---
 
@@ -39,8 +56,9 @@ export async function POST(request: NextRequest) {
   sessionStore.addPayment({
     endpoint: "/api/orders",
     method: "POST",
-    amount: total,
-    description: `Order from ${restaurant.name}: $${total.toFixed(2)}`,
+    amount: fees.total,
+    doordashRevenue: fees.doordashRevenue,
+    description: `Order from ${restaurant.name}: $${fees.total.toFixed(2)}`,
   });
 
   return result.withReceipt(
@@ -48,7 +66,12 @@ export async function POST(request: NextRequest) {
       orderId,
       restaurant: restaurant.name,
       items: items.map((i) => ({ name: i.name, price: i.price })),
-      total,
+      subtotal: fees.subtotal,
+      serviceFee: fees.serviceFee,
+      deliveryFee: fees.deliveryFee,
+      tax: fees.tax,
+      tip: fees.tip,
+      total: fees.total,
       status: "confirmed",
       estimatedDelivery: restaurant.deliveryTime,
     })

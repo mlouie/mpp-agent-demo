@@ -5,6 +5,7 @@ export type Restaurant = {
   priceRange: "$" | "$$" | "$$$";
   rating: number;
   deliveryTime: string;
+  serviceFee: number;
   menu: MenuItem[];
 };
 
@@ -22,6 +23,7 @@ export type PaymentEvent = {
   endpoint?: string;
   method?: string;
   amount?: number;
+  doordashRevenue?: number;
   voucherIndex?: number;
   description?: string;
   sessionId?: string;
@@ -34,6 +36,7 @@ export type SessionState = {
   status: "idle" | "open" | "settling" | "settled";
   events: PaymentEvent[];
   totalSpent: number;
+  doordashRevenue: number;
   onChainTxns: {
     open?: string;
     settle?: string;

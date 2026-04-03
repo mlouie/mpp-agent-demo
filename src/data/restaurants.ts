@@ -8,6 +8,7 @@ export const restaurants: Restaurant[] = [
     priceRange: "$$",
     rating: 4.6,
     deliveryTime: "25-35 min",
+    serviceFee: 2.49,
     menu: [
       {
         id: "green-papaya-salad",
@@ -67,6 +68,7 @@ export const restaurants: Restaurant[] = [
     priceRange: "$",
     rating: 4.4,
     deliveryTime: "20-30 min",
+    serviceFee: 2.99,
     menu: [
       {
         id: "street-tacos",
@@ -126,6 +128,7 @@ export const restaurants: Restaurant[] = [
     priceRange: "$$$",
     rating: 4.8,
     deliveryTime: "35-50 min",
+    serviceFee: 3.49,
     menu: [
       {
         id: "margherita-pizza",
@@ -185,6 +188,7 @@ export const restaurants: Restaurant[] = [
     priceRange: "$$$",
     rating: 4.7,
     deliveryTime: "30-45 min",
+    serviceFee: 3.49,
     menu: [
       {
         id: "salmon-nigiri",
@@ -251,6 +255,7 @@ export const restaurants: Restaurant[] = [
     priceRange: "$",
     rating: 4.3,
     deliveryTime: "15-25 min",
+    serviceFee: 0.99,
     menu: [
       {
         id: "classic-cheeseburger",
@@ -315,6 +320,45 @@ export function searchRestaurants(filters: {
 
 export function getRestaurantById(id: string): Restaurant | undefined {
   return restaurants.find((r) => r.id === id);
+}
+
+/**
+ * Computes the full order breakdown including DoorDash fees.
+ *
+ * Fee structure (DashPass member):
+ * - Service fee: varies by restaurant (e.g., $0.99 - $3.49) → DoorDash revenue
+ * - Delivery fee: $0.00 (DashPass benefit on orders $12+)
+ * - Tax: 8% of subtotal → pass-through to government
+ * - Recommended tip: 20% of subtotal → 100% to Dasher
+ *
+ * MPP micropayment insight: A $0.01 API browsing fee is impossible on
+ * traditional payment rails (credit card interchange alone is $0.10-0.30).
+ * At 10,000 agents × 20 calls/day, that's $2,000/day in new API access
+ * revenue with zero payment infrastructure.
+ */
+export function computeOrderFees(restaurantId: string, subtotal: number) {
+  const restaurant = getRestaurantById(restaurantId);
+  if (!restaurant) throw new Error(`Restaurant not found: ${restaurantId}`);
+
+  const TAX_RATE = 0.08;
+  const TIP_RATE = 0.20; // DoorDash's recommended (middle option)
+
+  const serviceFee = restaurant.serviceFee;
+  const deliveryFee = 0; // DashPass: $0 on orders $12+
+  const tax = Math.round(subtotal * TAX_RATE * 100) / 100;
+  const tip = Math.round(subtotal * TIP_RATE * 100) / 100;
+  const total = Math.round((subtotal + serviceFee + deliveryFee + tax + tip) * 100) / 100;
+
+  return {
+    subtotal,
+    serviceFee,
+    deliveryFee,
+    tax,
+    tip,
+    total,
+    // What DoorDash actually keeps from this order
+    doordashRevenue: serviceFee,
+  };
 }
 
 export function computeOrderTotal(restaurantId: string, itemIds: string[]): number {

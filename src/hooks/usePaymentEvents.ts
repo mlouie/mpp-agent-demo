@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { PaymentEvent, SessionState } from "@/types";
 
 const INITIAL_STATE: SessionState = {
-  sessionId: "", status: "idle", events: [], totalSpent: 0, onChainTxns: {},
+  sessionId: "", status: "idle", events: [], totalSpent: 0, doordashRevenue: 0, onChainTxns: {},
 };
 
 export function usePaymentEvents() {
@@ -24,6 +24,7 @@ export function usePaymentEvents() {
             break;
           case "payment":
             updated.totalSpent = prev.totalSpent + (event.amount || 0);
+            updated.doordashRevenue = prev.doordashRevenue + (event.doordashRevenue ?? event.amount ?? 0);
             break;
           case "session_settle":
             updated.status = "settled";

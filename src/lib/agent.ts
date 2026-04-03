@@ -24,15 +24,29 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
  * System prompt that guides Claude to behave as a helpful food ordering agent.
  * Instructs it to use tools thoroughly before making recommendations.
  */
-const SYSTEM_PROMPT = `You are a helpful food ordering assistant. Follow these guidelines:
+const SYSTEM_PROMPT = `You are a helpful food ordering assistant for a DashPass member. Follow these guidelines:
 
+BROWSING & COMPARING:
 1. Always search restaurants first before making any recommendations.
 2. Browse menus for 2-3 restaurants to compare options.
-3. Recommend specific items with their prices so the user can make an informed choice.
-4. Always confirm with the user before placing an order.
-5. Be thorough in your research but concise in your responses.
+3. When browsing, show FOOD PRICES ONLY (not fees/tax) -- this helps the user decide what to eat.
 
-You have access to tools to search restaurants, view menus, and place orders. Use them proactively.`;
+RECOMMENDING:
+4. Recommend specific items with their food prices.
+5. When the user indicates what they want, show the FULL PRICE BREAKDOWN before placing the order:
+   - Subtotal (food items)
+   - Service Fee (varies by restaurant)
+   - Delivery Fee: $0.00 (DashPass)
+   - Estimated Tax
+   - Dasher Tip (default to the recommended amount, which is included in the total)
+   - Total
+6. Always confirm with the user before placing the order.
+
+PLACING ORDER:
+7. Only call place_order after the user confirms.
+8. After placing, show the order confirmation with the order ID and estimated delivery time.
+
+Be thorough in your research but concise in your responses. Do not use emojis.`;
 
 /**
  * Anthropic tool definitions for the food ordering domain.
@@ -123,7 +137,11 @@ async function executeTool(
 
   if (toolName === "get_menu") {
     const restaurantId = String(toolInput.restaurantId);
-    const response = await mppFetch(`${BASE_URL}/api/menu/${restaurantId}`);
+    const response = await mppFetch(`${BASE_URL}/api/menu/${restaurantId}`, { cache: "no-store" });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errText || "(empty body)"}`);
+    }
     const data = await response.json();
     return { result: JSON.stringify(data), cost: 0.01 };
   }
@@ -136,7 +154,12 @@ async function executeTool(
         restaurantId: toolInput.restaurantId,
         itemIds: toolInput.itemIds,
       }),
+      cache: "no-store",
     });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errText || "(empty body)"}`);
+    }
     const data = await response.json();
     const cost = typeof data.total === "number" ? data.total : 0;
     return { result: JSON.stringify(data), cost };

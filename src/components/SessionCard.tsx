@@ -76,16 +76,26 @@ export function SessionCard({ state }: { state: SessionState }) {
               </div>
             </div>
 
-            {/* Revenue */}
+            {/* Total Charged */}
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">
-                Revenue
+                Total Charged
+              </p>
+              <p className="text-xl font-semibold text-gray-800">
+                ${state.totalSpent.toFixed(2)}
+              </p>
+            </div>
+
+            {/* DoorDash Revenue */}
+            <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+              <p className="text-xs text-green-700 uppercase tracking-wide mb-0.5">
+                DoorDash Revenue
               </p>
               <p className="text-2xl font-bold text-green-600">
-                ${state.totalSpent.toFixed(2)}
-                <span className="text-sm font-normal text-gray-400 ml-1">
-                  USD
-                </span>
+                ${state.doordashRevenue.toFixed(2)}
+              </p>
+              <p className="text-xs text-green-600 mt-0.5">
+                Service fees + API access
               </p>
             </div>
           </div>

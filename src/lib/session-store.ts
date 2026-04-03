@@ -21,7 +21,7 @@ export class SessionStore {
   }
 
   private createInitialState(): SessionState {
-    return { sessionId: "", status: "idle", events: [], totalSpent: 0, onChainTxns: {} };
+    return { sessionId: "", status: "idle", events: [], totalSpent: 0, doordashRevenue: 0, onChainTxns: {} };
   }
 
   getState(): SessionState {
@@ -38,13 +38,14 @@ export class SessionStore {
     this.emitter.emit("event", event);
   }
 
-  addPayment(details: { endpoint: string; method: string; amount: number; description: string }): void {
+  addPayment(details: { endpoint: string; method: string; amount: number; description: string; doordashRevenue?: number }): void {
     this.paymentIndex++;
     this.state.totalSpent += details.amount;
+    this.state.doordashRevenue += details.doordashRevenue ?? details.amount;
     const event: PaymentEvent = {
       type: "payment", timestamp: Date.now(), endpoint: details.endpoint,
-      method: details.method, amount: details.amount, voucherIndex: this.paymentIndex,
-      description: details.description,
+      method: details.method, amount: details.amount, doordashRevenue: details.doordashRevenue,
+      voucherIndex: this.paymentIndex, description: details.description,
     };
     this.state.events.push(event);
     this.emitter.emit("event", event);
