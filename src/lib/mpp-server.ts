@@ -21,6 +21,30 @@
  * Fee sponsorship: Setting `feePayer: true` means DoorDash pays gas fees
  * on behalf of the agent, removing friction. In production, you'd weigh
  * the gas cost (~$0.001) against the payment revenue.
+ *
+ * ── Demo talking points: Transaction cost savings ──────────────────────
+ *
+ * Traditional credit card processing on a $20 order:
+ *   Interchange + processing: ~2.0% + $0.15 = ~$0.55 per order
+ *   Chargebacks (~1-2% rate, ~$15-25 per dispute): adds ~$0.15-0.25
+ *   Effective cost: ~$0.70-0.80 per order
+ *
+ * MPP on Tempo:
+ *   Gas per on-chain transaction: ~$0.001-0.005
+ *   MPP session (2 on-chain txns total): ~$0.01
+ *   Chargebacks: $0 (stablecoin payments are final)
+ *
+ * Per-order savings: ~$0.55-0.75
+ *
+ * At DoorDash scale (~5M+ orders/day):
+ *   100K agent orders/day → ~$20M/year savings + ~$7M/year new API revenue
+ *   500K agent orders/day → ~$100M/year savings + ~$36M/year new API revenue
+ *   1M agent orders/day  → ~$200M/year savings + ~$73M/year new API revenue
+ *
+ * Key insight: $0.01 API browsing fees are IMPOSSIBLE on credit cards
+ * (Visa interchange minimum alone is ~$0.10-0.30). MPP creates an
+ * entirely new revenue stream that traditional payment rails can't support.
+ * ───────────────────────────────────────────────────────────────────────
  */
 import { Mppx, tempo } from "mppx/server";
 import { getDoorDashAccount } from "./tempo";
