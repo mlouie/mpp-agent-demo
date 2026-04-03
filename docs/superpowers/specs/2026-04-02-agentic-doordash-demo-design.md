@@ -367,3 +367,79 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 `viem` 2.43.0+ includes Tempo chain support via `viem/tempo`, so a separate `tempo.ts` package is not needed for chain interaction. The `mppx` package provides both client and server MPP functionality. If during implementation we find that `mppx` re-exports or depends on `tempo.ts` internally, we will not add it as a direct dependency unless required for APIs not available through `viem/tempo`.
+
+---
+
+## Code Documentation Strategy
+
+The audience for this codebase is a **DoorDash developer evaluating Tempo/MPP for integration**. They will read the code as a reference implementation. Documentation should help them answer: *"How would I add this to our real APIs?"*
+
+### Principles
+
+- **Comment the "why Tempo" not the "what TypeScript"** -- Don't explain language/framework basics. Do explain every Tempo/MPP-specific decision: why this payment model, why this fee amount, why this settlement pattern.
+- **Highlight the integration surface** -- Clearly mark where MPP touches application code vs. where it's standard Next.js. A DoorDash engineer should be able to see exactly which lines are "new" if they adopted MPP.
+- **Show the production path** -- Where the demo takes a shortcut (hardcoded data, in-memory state, testnet), comment what the production equivalent would be. This bridges the gap between "cool demo" and "I can actually use this."
+
+### Where and What to Document
+
+**`lib/mpp-server.ts` -- The most important file for the audience.**
+This is what DoorDash would actually copy. Document:
+- How to initialize the MPP server with a recipient wallet and currency
+- How `mppx.charge()` works as middleware (the 402 challenge/response flow)
+- How fee sponsorship could be added (DoorDash paying gas so agents don't need to)
+- Production note: how to swap testnet config for mainnet
+
+**`lib/mpp-client.ts` -- How an AI agent pays.**
+Document:
+- How `mppx` polyfills `fetch` to auto-handle 402 payment challenges
+- The session lifecycle: when does a session open, how are vouchers signed, when does it settle
+- Production note: in a real system, this is the AI agent's SDK -- DoorDash wouldn't write this, but understanding the client side helps them reason about the protocol
+
+**`api/restaurants/route.ts`, `api/menu/[id]/route.ts`, `api/orders/route.ts` -- Pattern files.**
+Each API route should have a header comment block showing:
+- What this route does (one line)
+- How MPP gates it (the charge amount and why that amount was chosen)
+- What a DoorDash engineer would change to apply this pattern to their own API
+- For the orders route specifically: how dynamic pricing works with MPP
+
+**`lib/agent.ts` -- The AI agent orchestration.**
+Document:
+- How Claude's tool-use maps to MPP-gated API calls
+- The pattern: Claude decides what to call -> agent calls the MPP-gated endpoint -> payment happens transparently -> Claude gets the data back
+- Production note: this pattern works for any AI agent framework, not just Claude
+
+**`lib/session-store.ts` -- Demo scaffolding, clearly marked.**
+Document:
+- This is demo-only infrastructure for visualization
+- In production, MPP session state lives in the protocol -- you don't need to track it yourself
+- DoorDash would use Tempo's block explorer or their own indexer for payment reporting
+
+### What NOT to Document
+
+- React component internals (standard frontend, not Tempo-specific)
+- Tailwind styling choices
+- Next.js App Router conventions
+- TypeScript type definitions (self-documenting)
+
+### Format
+
+Use JSDoc-style block comments at the top of each key file, plus inline comments at critical Tempo/MPP lines. Keep comments concise -- a DoorDash engineer reading this is technical and doesn't need hand-holding, just context on the parts that are new to them.
+
+```ts
+/**
+ * MPP-Gated Restaurant Search API
+ *
+ * This route demonstrates how to gate an existing API endpoint with MPP.
+ * The only MPP-specific code is the mppx.charge() middleware wrapper --
+ * everything else is a standard Next.js route handler.
+ *
+ * To apply this pattern to your own API:
+ * 1. Create an Mppx server instance (see lib/mpp-server.ts)
+ * 2. Wrap your route handler with mppx.charge({ amount })
+ * 3. That's it -- mppx handles the 402 challenge/response protocol
+ *
+ * Production note: In a real deployment, you'd use mainnet RPC and
+ * a custody solution (e.g., Fireblocks) for the recipient wallet
+ * instead of a raw private key.
+ */
+```
