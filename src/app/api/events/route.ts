@@ -11,20 +11,28 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const encoder = new TextEncoder();
+  let unsub: (() => void) | null = null;
+  let closed = false;
+
   const stream = new ReadableStream({
     start(controller) {
       const currentState = sessionStore.getState();
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "init", state: currentState })}\n\n`));
 
-      const unsub = sessionStore.subscribe((event) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      unsub = sessionStore.subscribe((event) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          // Controller closed (client disconnected) -- clean up
+          closed = true;
+          unsub?.();
+        }
       });
-
-      // Store cleanup for when connection closes
-      (controller as unknown as { _cleanup: () => void })._cleanup = unsub;
     },
     cancel() {
-      // Client disconnected
+      closed = true;
+      unsub?.();
     },
   });
 

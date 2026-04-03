@@ -11,7 +11,13 @@ import { sessionStore } from "@/lib/session-store";
 import type { ChatMessage } from "@/types";
 
 export async function POST(request: NextRequest) {
-  const { messages } = (await request.json()) as { messages: ChatMessage[] };
+  let messages: ChatMessage[];
+  try {
+    const body = await request.json();
+    messages = body.messages;
+  } catch (e) {
+    return Response.json({ error: "Invalid request body", detail: (e as Error).message }, { status: 400 });
+  }
 
   // Open a session if this is the first request in a new conversation
   if (sessionStore.getState().status === "idle") {

@@ -24,7 +24,17 @@ import { sessionStore } from "@/lib/session-store";
 
 export async function GET(request: NextRequest) {
   // --- MPP payment gate ---
-  const result = await mppServer.charge({ amount: "0.01" })(request);
+  let result;
+  try {
+    result = await mppServer.charge({ amount: "0.01" })(request);
+  } catch (e: unknown) {
+    const err = e as Error;
+    console.error("[MPP CHARGE ERROR]", err.message, err.stack);
+    return Response.json(
+      { error: "MPP charge failed", detail: err.message },
+      { status: 500 }
+    );
+  }
   if (result.status === 402) return result.challenge;
   // --- End MPP gate ---
 
