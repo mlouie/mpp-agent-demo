@@ -144,7 +144,7 @@ export function ChatPanel({ messages, isLoading, activeTool, onSendMessage }: Ch
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-200 px-4 py-3">
+      <div className="border-t border-gray-200 px-4 py-3 relative z-50">
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <textarea
             value={input}
