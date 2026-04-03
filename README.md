@@ -2,6 +2,8 @@
 
 A full-stack demo exploring how DoorDash could use Tempo's [Machine Payments Protocol (MPP)](https://mpp.dev) to enable AI agent commerce and reduce payment processing costs.
 
+![Demo](docs/demo.gif)
+
 ## What This Demonstrates
 
 An AI agent orders food on behalf of a user, paying for DoorDash API access and placing orders using stablecoins on the Tempo blockchain. The demo runs as a split-screen app:
