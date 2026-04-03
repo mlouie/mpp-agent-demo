@@ -82,9 +82,9 @@ export function SessionCard({ state }: { state: SessionState }) {
                 Revenue
               </p>
               <p className="text-2xl font-bold text-green-600">
-                ${(state.totalSpent / 1_000_000).toFixed(4)}
+                ${state.totalSpent.toFixed(2)}
                 <span className="text-sm font-normal text-gray-400 ml-1">
-                  USDC
+                  USD
                 </span>
               </p>
             </div>

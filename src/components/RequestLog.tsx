@@ -39,7 +39,7 @@ export function RequestLog({ events }: { events: PaymentEvent[] }) {
               {/* Amount */}
               {event.amount !== undefined && (
                 <span className="shrink-0 text-xs font-semibold text-green-600 ml-2">
-                  +${(event.amount / 1_000_000).toFixed(4)}
+                  +${event.amount.toFixed(2)}
                 </span>
               )}
             </div>
