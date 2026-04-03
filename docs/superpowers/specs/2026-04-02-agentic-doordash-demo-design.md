@@ -63,7 +63,7 @@ DoorDash is the **MPP server** (receiving payments). External AI agents are **MP
 ## Frontend Design
 
 ### Layout
-Split-screen, 50/50 on desktop. Top bar with demo title: "Agentic Commerce on Tempo -- DoorDash Demo". Clean, professional aesthetic -- Stripe Dashboard style, not DeFi/crypto aesthetics.
+Split-screen, 50/50 on desktop. Top bar with demo title: "Agentic Commerce on Tempo -- DoorDash Demo". Clean, professional aesthetic -- Stripe Dashboard style, not DeFi/crypto aesthetics. A "New Order" button in the top bar resets the session (see Session Reset below).
 
 ### Left Panel -- "The Agent"
 - Chat interface with text input at bottom
@@ -81,6 +81,16 @@ Split-screen, 50/50 on desktop. Top bar with demo title: "Agentic Commerce on Te
 - **Settlement Timeline** -- Visual progression: Session Opened -> N vouchers signed -> Session Settled. Highlights: "4 interactions, 2 on-chain transactions"
 - **On-chain Proof** -- Clickable link to Tempo block explorer showing the real settlement transaction
 
+### Session Reset
+
+A "New Order" button in the top bar:
+1. Calls `POST /api/session/reset` to clear server-side session state
+2. Clears the chat history in the left panel
+3. Resets the right panel to an empty "Waiting for agent activity..." state
+4. The next agent API call will open a fresh MPP session
+
+Page refresh also triggers a reset via the same mechanism (session state is in-memory, so a server restart naturally clears it; the frontend clears its local state on mount if no active session exists).
+
 ---
 
 ## Backend Design
@@ -93,41 +103,80 @@ Three endpoints gated by `mppx.charge()`:
 |----------|--------|------------|-------------|
 | `/api/restaurants` | GET | $0.01 | Search by cuisine, price range |
 | `/api/menu/[restaurantId]` | GET | $0.01 | Full menu for a restaurant |
-| `/api/orders` | POST | Order total | Place an order (sum of item prices) |
+| `/api/orders` | POST | Dynamic (order total) | Place an order (sum of item prices) |
 
-Server setup:
+Server setup using AlphaUSD (testnet stablecoin):
 ```ts
-// Using AlphaUSD (testnet stablecoin) as the payment currency
 const mppServer = Mppx.create({
   methods: [tempo({ currency: ALPHA_USD, recipient: doorDashWallet })]
 });
+
+// Fixed-price endpoints (browsing)
 export const GET = mppServer.charge({ amount: 0.01 })(handler);
+
+// Dynamic-price endpoint (ordering)
+// The order total is computed from the request body (sum of selected item prices),
+// then passed to mppx.charge() at request time.
+export const POST = async (req: Request) => {
+  const { items } = await req.json();
+  const total = computeOrderTotal(items);
+  return mppServer.charge({ amount: total })(orderHandler)(req);
+};
 ```
+
+**Note on MPP payment models:** The `mppx` SDK supports three models: one-time charges, pay-as-you-go sessions, and streamed payments. During implementation, we will determine which model the SDK best supports for our use case by reading the `mppx` source and docs. The ideal is **pay-as-you-go sessions** (open once, sign off-chain vouchers per call, settle once) because the "many interactions, 2 transactions" narrative is the demo's centerpiece. If the SDK's session API requires a different server-side pattern than `mppx.charge()`, we will adapt. The fallback is one-time charges per request, which still demonstrates MPP but with more on-chain transactions. The right panel visualization will reflect whichever model we use.
 
 ### 2. AI Agent (MPP Client + Claude)
 
 Single route handler: `POST /api/agent`
 
+This endpoint uses a **streaming response** to deliver the chat text back to the frontend (typewriter effect). Payment events are delivered on a **separate channel** (see section 3).
+
 Flow:
 1. Receives user message from chat UI
 2. Calls Claude (Anthropic API) with tool use
 3. When Claude calls a tool, the agent makes the corresponding MPP-gated API call via `mppx` client SDK (automatic 402 -> pay -> retry)
-4. Emits payment events via SSE
-5. Returns Claude's response + payment events to frontend
+4. Writes each payment event to the in-memory session store (which the SSE endpoint reads from)
+5. Streams Claude's text response back to the frontend as it generates
 
-### 3. Real-time Event Stream (SSE)
-
-The agent route streams payment events to the frontend as they happen:
 ```ts
+// MPP client setup -- polyfills fetch to auto-handle 402 challenges
+const mppClient = Mppx.create({
+  methods: [tempo({ account: agentWallet })]
+});
+
+// When Claude calls a tool like search_restaurants:
+const response = await mppClient.fetch("http://localhost:3000/api/restaurants?cuisine=thai");
+// mppx automatically: detects 402 -> signs payment -> retries -> returns data
+```
+
+### 3. Real-time Payment Events (SSE)
+
+A **dedicated SSE endpoint** (`GET /api/events`) that the frontend connects to on page load. This is separate from the agent chat stream.
+
+The SSE endpoint reads from the in-memory session store and pushes events as they are written by the agent:
+
+```ts
+// Event types pushed to the frontend:
 { type: "session_open", sessionId: string, txHash: string }
 { type: "payment", endpoint: string, amount: number, voucherIndex: number, description: string }
 { type: "session_settle", totalSpent: number, txHash: string }
+{ type: "session_reset" }
 ```
+
+**Two-stream architecture summary:**
+- **Stream 1** (`POST /api/agent`): Streaming response delivering chat text (left panel)
+- **Stream 2** (`GET /api/events`): SSE delivering payment events (right panel)
+- Both streams read/write from the shared in-memory session store
+
+### 4. Session Management
+
+- `POST /api/session/reset` -- Clears in-memory session state, pushes a `session_reset` event via SSE
 
 ### Wallet Setup
 
 Two testnet wallets (private keys in `.env`):
-- **Agent wallet** -- MPP client, funded with testnet stablecoins
+- **Agent wallet** -- MPP client, funded with testnet stablecoins (AlphaUSD)
 - **DoorDash wallet** -- MPP server recipient, receives payments
 
 ---
@@ -174,7 +223,7 @@ type PaymentEvent = {
 
 type SessionState = {
   sessionId: string;
-  status: "open" | "settling" | "settled";
+  status: "idle" | "open" | "settling" | "settled";
   events: PaymentEvent[];
   totalSpent: number;
   onChainTxns: {
@@ -184,14 +233,16 @@ type SessionState = {
 };
 ```
 
-Held in memory on the server. Resets on each new conversation.
+Held in memory on the server. Resets via `POST /api/session/reset` or on server restart.
 
 ### MPP Session Lifecycle
 
-1. **Session opens** on the agent's first API call (1 on-chain transaction)
-2. **Vouchers are signed off-chain** for each subsequent API call (no on-chain cost)
-3. **Session settles** after the order is placed and the agent explicitly closes the session (1 on-chain transaction)
-4. Total: 2 on-chain transactions regardless of how many API calls were made
+1. **Session opens** on the agent's first API call (1 on-chain transaction). Status: `idle` -> `open`.
+2. **Vouchers are signed off-chain** for each subsequent API call (no on-chain cost). Each voucher increments the cumulative amount owed.
+3. **Session settles** after the order is placed and the agent explicitly closes the session (1 on-chain transaction). Status: `open` -> `settling` -> `settled`.
+4. Total: 2 on-chain transactions regardless of how many API calls were made.
+
+**Implementation note:** This lifecycle describes the ideal pay-as-you-go session model. If the `mppx` SDK's session API works differently (e.g., requires server-side session management, or sessions are implicit), we will adapt the implementation while preserving the narrative. The key demo point -- "many interactions collapsed into few transactions" -- holds regardless of the specific API shape.
 
 ---
 
@@ -199,7 +250,7 @@ Held in memory on the server. Resets on each new conversation.
 
 ### Claude Configuration
 
-- **Model:** Claude Sonnet (fast, capable enough for tool use)
+- **Model:** claude-sonnet-4-6 (fast, capable for tool use)
 - **System prompt:** Frames Claude as a food ordering assistant that is budget-aware, thorough (checks multiple restaurants), and confirms before ordering.
 
 ### Tools
@@ -234,7 +285,7 @@ Held in memory on the server. Resets on each new conversation.
 
 Hidden `/status` route that checks:
 - Tempo RPC connectivity
-- Agent wallet balance
+- Agent wallet balance (warns if below $50 AlphaUSD)
 - Claude API reachability
 - Returns simple green/red status for each
 
@@ -258,8 +309,10 @@ src/
       restaurants/route.ts    # MPP-gated restaurant search
       menu/[id]/route.ts      # MPP-gated menu lookup
       orders/route.ts         # MPP-gated order placement
-      agent/route.ts          # AI agent (MPP client + Claude)
-      events/route.ts         # SSE endpoint for payment events
+      agent/route.ts          # AI agent (MPP client + Claude), streams chat text
+      events/route.ts         # SSE endpoint for payment events (right panel)
+      session/
+        reset/route.ts        # Reset session state
       status/route.ts         # Health check
   components/
     ChatPanel.tsx             # Left panel - agent chat
@@ -270,13 +323,32 @@ src/
   data/
     restaurants.ts            # Hardcoded restaurant catalog
   lib/
-    mpp-server.ts             # MPP server setup
-    mpp-client.ts             # MPP client setup
+    mpp-server.ts             # MPP server setup (DoorDash side)
+    mpp-client.ts             # MPP client setup (agent side)
     agent.ts                  # Claude agent logic with tools
-    tempo.ts                  # Tempo wallet/chain config
-    session-store.ts          # In-memory session state
+    tempo.ts                  # Tempo wallet/chain config via viem
+    session-store.ts          # In-memory session state + event emitter
   types/
     index.ts                  # Shared TypeScript types
+```
+
+---
+
+## Environment Variables
+
+```env
+# AI
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Tempo Wallets (testnet only -- never use mainnet keys)
+AGENT_PRIVATE_KEY=0x...
+DOORDASH_PRIVATE_KEY=0x...
+
+# Tempo Network
+TEMPO_RPC_URL=https://rpc.moderato.tempo.xyz
+
+# Optional: override for local development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ---
@@ -290,9 +362,8 @@ src/
   "tailwindcss": "^4",
   "mppx": "latest",
   "viem": "^2.43.0",
-  "@anthropic-ai/sdk": "latest",
-  "tempo.ts": "latest"
+  "@anthropic-ai/sdk": "latest"
 }
 ```
 
-Note: `viem` 2.43.0+ has Tempo chain support built in via `viem/tempo`.
+`viem` 2.43.0+ includes Tempo chain support via `viem/tempo`, so a separate `tempo.ts` package is not needed for chain interaction. The `mppx` package provides both client and server MPP functionality. If during implementation we find that `mppx` re-exports or depends on `tempo.ts` internally, we will not add it as a direct dependency unless required for APIs not available through `viem/tempo`.
