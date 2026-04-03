@@ -30,8 +30,10 @@ const doorDashAccount = getDoorDashAccount();
 // tempo() returns both charge and session method configs.
 // `testnet: true` auto-selects: Moderato chain, pathUSD currency, testnet RPC.
 // No need for TEMPO_RPC_URL env var -- testnet mode handles it.
+// `account` must be a full viem Account (not just an address string) so that
+// the session method can sign on-chain channel-close/settlement transactions.
 const methods = tempo({
-  recipient: doorDashAccount.address,
+  account: doorDashAccount,
   testnet: true,
 });
 
