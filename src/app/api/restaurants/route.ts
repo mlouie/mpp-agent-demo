@@ -5,7 +5,27 @@
  * The only MPP-specific code is the mppServer.charge() call --
  * everything else is a standard Next.js route handler.
  *
- * Charge: $0.01 per search query (micropayment for API access).
+ * Charge: $0.01 per search query.
+ *
+ * ── Why charge for browsing? ──────────────────────────────────────────
+ * The primary value of MPP for DoorDash is reducing transaction costs on
+ * ORDERS -- replacing credit card processing (~$0.55-0.80/order) with
+ * stablecoin settlement (~$0.01/session). That's the headline story.
+ *
+ * Charging for API browsing is a secondary benefit: it acts as natural
+ * abuse prevention. Without it, competitors could scrape every menu and
+ * price in every market for free. With a $0.01 cost per call, scraping
+ * 1M items costs $10,000 -- economically irrational -- while a
+ * legitimate agent ordering lunch spends $0.03-0.05 (invisible to the
+ * user). No API keys, no rate limiting infrastructure, no abuse
+ * detection needed. The payment IS the rate limit.
+ *
+ * Footnote: This pattern (micropayments as abuse prevention) isn't new
+ * conceptually -- HTTP 402 "Payment Required" was reserved for this in
+ * 1997, and Hashcash (1997) proposed computational cost for email spam.
+ * What's new is that Tempo makes it economically viable for the first
+ * time. Credit card minimums (~$0.30) made $0.01 API calls impossible.
+ * ──────────────────────────────────────────────────────────────────────
  *
  * To apply this pattern to your own API:
  * 1. Import your shared mppServer instance (see lib/mpp-server.ts)
