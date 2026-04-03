@@ -24,26 +24,47 @@
  *
  * ── Demo talking points: Transaction cost savings ──────────────────────
  *
- * Traditional credit card processing on a $20 order:
- *   Interchange + processing: ~2.0% + $0.15 = ~$0.55 per order
- *   Chargebacks (~1-2% rate, ~$15-25 per dispute): adds ~$0.15-0.25
- *   Effective cost: ~$0.70-0.80 per order
+ * Per-order comparison (avg $30 order):
  *
- * MPP on Tempo:
- *   Gas per on-chain transaction: ~$0.001-0.005
- *   MPP session (2 on-chain txns total): ~$0.01
- *   Chargebacks: $0 (stablecoin payments are final)
+ *   Credit cards (negotiated large-merchant rate):
+ *     Processing: ~2.0-2.5% + $0.10-0.15 = ~$0.70-0.90 per order
+ *     Chargebacks (~1% rate, ~$20 avg dispute cost): ~$0.15-0.20/order
+ *     Effective cost: ~$0.85-1.10 per order
  *
- * Per-order savings: ~$0.55-0.75
+ *   MPP on Tempo:
+ *     Gas per session (2 on-chain txns): ~$0.01
+ *     Chargebacks: $0 (stablecoin payments are final)
  *
- * At DoorDash scale (~5M+ orders/day):
- *   100K agent orders/day → ~$20M/year savings + ~$7M/year new API revenue
- *   500K agent orders/day → ~$100M/year savings + ~$36M/year new API revenue
- *   1M agent orders/day  → ~$200M/year savings + ~$73M/year new API revenue
+ *   Net savings: ~$0.75-1.00 per order
  *
- * Key insight: $0.01 API browsing fees are IMPOSSIBLE on credit cards
- * (Visa interchange minimum alone is ~$0.10-0.30). MPP creates an
- * entirely new revenue stream that traditional payment rails can't support.
+ * ── Annual savings by agent adoption (DoorDash ~2.5B orders/year) ────
+ *
+ *   1% agent adoption (Year 1, conservative):
+ *     25M agent orders → $19-25M/year savings
+ *
+ *   5-10% agent adoption (Year 2-3):
+ *     125-250M agent orders → $94-250M/year savings
+ *
+ *   20% agent adoption (Year 3-5, mainstream):
+ *     600M agent orders → $450-600M/year savings
+ *
+ *   Full adoption (hypothetical):
+ *     2.5B+ orders → $1.9-2.5B/year savings
+ *
+ * Key assumptions:
+ *   - Agent adoption rate is the biggest variable. DoorDash already has
+ *     AI features; every major AI lab is building agent capabilities.
+ *   - These savings are ON TOP of normal DoorDash revenue (commissions,
+ *     service fees, delivery fees) which are identical for agent orders.
+ *   - Chargeback elimination is high-certainty regardless of adoption --
+ *     stablecoin payments are final, zero dispute infrastructure needed.
+ *   - API browsing fees ($0.01/call) add incremental revenue but the
+ *     primary value is abuse prevention, not the revenue itself.
+ *
+ * One-liner for the demo:
+ *   "At 1% agent adoption -- conservative for a year from now -- you're
+ *    saving $20M annually on payment processing. At 10%, it's a quarter
+ *    billion. And those orders generate your normal fees on top."
  * ───────────────────────────────────────────────────────────────────────
  */
 import { Mppx, tempo } from "mppx/server";
