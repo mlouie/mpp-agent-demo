@@ -111,7 +111,12 @@ async function executeTool(
     if (toolInput.priceRange) params.set("priceRange", String(toolInput.priceRange));
 
     const query = params.toString() ? `?${params.toString()}` : "";
-    const response = await mppFetch(`${BASE_URL}/api/restaurants${query}`);
+    const url = `${BASE_URL}/api/restaurants${query}`;
+    const response = await mppFetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errText || "(empty body)"}`);
+    }
     const data = await response.json();
     return { result: JSON.stringify(data), cost: 0.01 };
   }
