@@ -76,7 +76,7 @@ function Step({ completed, label, detail, isLast }: StepProps) {
 }
 
 export function SettlementTimeline({ state }: { state: SessionState }) {
-  const { status, events, onChainTxns, totalSpent } = state;
+  const { status, events, onChainTxns, doordashRevenue } = state;
 
   const paymentCount = events.filter((e) => e.type === "payment").length;
   const sessionOpened = status !== "idle";
@@ -131,10 +131,11 @@ export function SettlementTimeline({ state }: { state: SessionState }) {
               2 on-chain transactions
             </p>
             <p className="text-xs text-green-600 mt-0.5">
-              Total revenue:{" "}
+              DoorDash revenue:{" "}
               <span className="font-semibold">
-                ${(totalSpent / 1_000_000).toFixed(4)} USDC
+                ${doordashRevenue.toFixed(2)}
               </span>
+              {" "}(service fees + API access)
             </p>
           </div>
         )}
