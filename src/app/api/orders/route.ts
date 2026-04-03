@@ -61,6 +61,11 @@ export async function POST(request: NextRequest) {
     description: `Order from ${restaurant.name}: $${fees.total.toFixed(2)}`,
   });
 
+  // Settle the MPP session -- the order is the final transaction.
+  // In a real MPP session, this would close the payment channel and
+  // submit the final cumulative voucher on-chain (1 transaction).
+  sessionStore.settleSession();
+
   return result.withReceipt(
     Response.json({
       orderId,
