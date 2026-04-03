@@ -18,16 +18,19 @@
 import { Mppx, tempo } from "mppx/client";
 import { getAgentAccount } from "./tempo";
 
-const agentAccount = getAgentAccount();
+function createMppClient() {
+  const agentAccount = getAgentAccount();
 
-const mppClient = Mppx.create({
-  methods: [
-    tempo({
-      account: agentAccount,
-    }),
-  ],
-  polyfill: false, // Don't replace globalThis.fetch -- would break Claude API calls
-});
+  return Mppx.create({
+    methods: [tempo({ account: agentAccount })],
+    polyfill: false, // Don't replace globalThis.fetch -- would break Claude API calls
+  });
+}
+
+// Singleton: survives Next.js hot-reloads in dev.
+const globalForMppClient = globalThis as unknown as { mppClient: ReturnType<typeof createMppClient> };
+const mppClient = globalForMppClient.mppClient || createMppClient();
+globalForMppClient.mppClient = mppClient;
 
 /**
  * MPP-aware fetch. Drop-in replacement for fetch() that automatically

@@ -25,20 +25,26 @@
 import { Mppx, tempo } from "mppx/server";
 import { getDoorDashAccount } from "./tempo";
 
-const doorDashAccount = getDoorDashAccount();
+function createMppServer() {
+  const doorDashAccount = getDoorDashAccount();
 
-// tempo() returns both charge and session method configs.
-// `testnet: true` auto-selects: Moderato chain, pathUSD currency, testnet RPC.
-// No need for TEMPO_RPC_URL env var -- testnet mode handles it.
-// `account` must be a full viem Account (not just an address string) so that
-// the session method can sign on-chain channel-close/settlement transactions.
-const methods = tempo({
-  account: doorDashAccount,
-  testnet: true,
-});
+  // tempo() returns both charge and session method configs.
+  // `testnet: true` auto-selects: Moderato chain, pathUSD currency, testnet RPC.
+  // `account` must be a full viem Account (not just an address string) so that
+  // the session method can sign on-chain channel-close/settlement transactions.
+  const methods = tempo({
+    account: doorDashAccount,
+    testnet: true,
+  });
 
-// MPP_SECRET_KEY env var is required -- used for stateless HMAC verification
-// of payment challenges. Set it in .env.local (any random string works for demos).
-export const mppServer = Mppx.create({
-  methods,
-});
+  // MPP_SECRET_KEY env var is required -- used for stateless HMAC verification
+  // of payment challenges. Set it in .env.local (any random string works for demos).
+  return Mppx.create({ methods });
+}
+
+// Singleton: survives Next.js hot-reloads in dev.
+// Without this, hot-reloads create a new Mppx instance whose HMAC state
+// can't verify challenges issued by the previous instance, causing 500s.
+const globalForMpp = globalThis as unknown as { mppServer: ReturnType<typeof createMppServer> };
+export const mppServer = globalForMpp.mppServer || createMppServer();
+globalForMpp.mppServer = mppServer;
